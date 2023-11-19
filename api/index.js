@@ -14,11 +14,14 @@ const multer = require('multer');
 const fs = require('fs');
 const mime = require('mime-types');
 const morgan = require('morgan');
+const path = require('path');
 
 const cloudinary = require('cloudinary').v2;
 
 require('dotenv').config();
 const app = express();
+
+const pathTempFiles = path.join(__dirname, '/tmp');
 
 const bcryptSalt = bcrypt.genSaltSync(10);
 const jwtSecret = 'fasefraw4r5r3wq45wdfgw34twdfg';
@@ -150,15 +153,20 @@ app.post('/api/logout', (req,res) => {
 app.post('/api/upload-by-link', async (req,res) => {
   const {link} = req.body;
   const newName = 'photo' + Date.now() + '.jpg';
-  await imageDownloader.image({
-    url: link,
-    dest: '/tmp/' +newName,
-  });
-  const url = await uploadToCloudinary('/tmp/' +newName, newName, mime.lookup('/tmp/' +newName));
-  res.json(url);
+  try {
+    await imageDownloader.image({
+      url: link,
+      dest: pathTempFiles + "/" + newName,
+    });
+    const url = await uploadToCloudinary(pathTempFiles + "/" + newName, newName, mime.lookup(pathTempFiles + "/" + newName));
+    res.json(url);
+  } catch (e) {
+    console.log(e);
+    res.status(422).json(e);
+  }
 });
 
-const photosMiddleware = multer({dest:'/tmp'});
+const photosMiddleware = multer({dest: pathTempFiles});
 app.post('/api/upload', photosMiddleware.array('photos', 100), async (req,res) => {
   const uploadedFiles = [];
   for (let i = 0; i < req.files.length; i++) {

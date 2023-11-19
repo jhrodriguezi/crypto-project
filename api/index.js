@@ -7,11 +7,15 @@ const User = require('./models/User.js');
 const Place = require('./models/Place.js');
 const Booking = require('./models/Booking.js');
 const cookieParser = require('cookie-parser');
+const bodyParser = require('body-parser');
 const imageDownloader = require('image-downloader');
 const {S3Client, PutObjectCommand} = require('@aws-sdk/client-s3');
 const multer = require('multer');
 const fs = require('fs');
 const mime = require('mime-types');
+const morgan = require('morgan');
+
+const cloudinary = require('cloudinary').v2;
 
 require('dotenv').config();
 const app = express();
@@ -20,12 +24,24 @@ const bcryptSalt = bcrypt.genSaltSync(10);
 const jwtSecret = 'fasefraw4r5r3wq45wdfgw34twdfg';
 const bucket = 'dawid-booking-app';
 
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
 app.use(express.json());
 app.use(cookieParser());
+
+// Middleware para analizar el cuerpo de las solicitudes
+app.use(bodyParser.urlencoded({ extended: true }));
+
+app.use(morgan('dev'));
+
 app.use('/uploads', express.static(__dirname+'/uploads'));
 app.use(cors({
   credentials: true,
-  origin: 'http://127.0.0.1:5173',
+  origin: 'http://localhost:5173',
 }));
 
 async function uploadToS3(path, originalFilename, mimetype) {
@@ -36,6 +52,7 @@ async function uploadToS3(path, originalFilename, mimetype) {
       secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
     },
   });
+
   const parts = originalFilename.split('.');
   const ext = parts[parts.length - 1];
   const newFilename = Date.now() + '.' + ext;
@@ -47,6 +64,15 @@ async function uploadToS3(path, originalFilename, mimetype) {
     ACL: 'public-read',
   }));
   return `https://${bucket}.s3.amazonaws.com/${newFilename}`;
+}
+
+async function uploadToCloudinary(path, originalFilename, mimetype) {
+  const result = await cloudinary.uploader.upload(path, {
+    public_id: originalFilename,
+    folder: 'uploads/',
+  });
+
+  return result.secure_url;
 }
 
 function getUserDataFromReq(req) {
@@ -128,7 +154,7 @@ app.post('/api/upload-by-link', async (req,res) => {
     url: link,
     dest: '/tmp/' +newName,
   });
-  const url = await uploadToS3('/tmp/' +newName, newName, mime.lookup('/tmp/' +newName));
+  const url = await uploadToCloudinary('/tmp/' +newName, newName, mime.lookup('/tmp/' +newName));
   res.json(url);
 });
 
@@ -137,7 +163,7 @@ app.post('/api/upload', photosMiddleware.array('photos', 100), async (req,res) =
   const uploadedFiles = [];
   for (let i = 0; i < req.files.length; i++) {
     const {path,originalname,mimetype} = req.files[i];
-    const url = await uploadToS3(path, originalname, mimetype);
+    const url = await uploadToCloudinary(path, originalname, mimetype);
     uploadedFiles.push(url);
   }
   res.json(uploadedFiles);

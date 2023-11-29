@@ -3,6 +3,7 @@ import {differenceInCalendarDays} from "date-fns";
 import axios from "axios";
 import {Navigate} from "react-router-dom";
 import {UserContext} from "./UserContext.jsx";
+import { validateDate, validatePhoneNumber, validateName } from './utils/validation.js'
 
 export default function BookingWidget({place}) {
   const [checkIn,setCheckIn] = useState('');
@@ -11,6 +12,7 @@ export default function BookingWidget({place}) {
   const [name,setName] = useState('');
   const [phone,setPhone] = useState('');
   const [redirect,setRedirect] = useState('');
+  const [formErrors,setFormErrors] = useState({});
   const {user} = useContext(UserContext);
 
   useEffect(() => {
@@ -24,7 +26,38 @@ export default function BookingWidget({place}) {
     numberOfNights = differenceInCalendarDays(new Date(checkOut), new Date(checkIn));
   }
 
+  // Función para validar el formulario
+  const validateForm = () => {
+    const errors = {};
+
+    if (!validateDate(checkIn) || !validateDate(checkOut)) {
+      errors.date = 'Por favor, selecciona fechas válidas.';
+    }
+
+    if (numberOfGuests < 1) {
+      errors.guests = 'Número de invitados debe ser al menos 1.';
+    }
+
+    if (!validateName(name)) {
+      errors.name = 'Por favor, ingresa un nombre válido.';
+    }
+
+    if (!validatePhoneNumber(phone)) {
+      errors.phone = 'Por favor, ingresa un número de teléfono válido.';
+    }
+
+    return errors; // Devuelve true si no hay errores
+  };
+
   async function bookThisPlace() {
+
+    const errors = validateForm();
+    
+    if (Object.keys(errors).length != 0) {
+      setFormErrors(errors);
+      return;
+    }
+
     const response = await axios.post('/bookings', {
       checkIn,checkOut,numberOfGuests,name,phone,
       place:place._id,
@@ -62,6 +95,7 @@ export default function BookingWidget({place}) {
           <input type="number"
                  value={numberOfGuests}
                  onChange={ev => setNumberOfGuests(ev.target.value)}/>
+          {formErrors.guests && (<p>{formErrors.guests}</p>)}
         </div>
         {numberOfNights > 0 && (
           <div className="py-3 px-4 border-t">
@@ -69,10 +103,12 @@ export default function BookingWidget({place}) {
             <input type="text"
                    value={name}
                    onChange={ev => setName(ev.target.value)}/>
+            {formErrors.name && (<p>{formErrors.name}</p>)}
             <label>Phone number:</label>
             <input type="tel"
                    value={phone}
                    onChange={ev => setPhone(ev.target.value)}/>
+            {formErrors.phone && (<p>{formErrors.phone}</p>)}       
           </div>
         )}
       </div>
